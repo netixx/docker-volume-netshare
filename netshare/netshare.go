@@ -18,29 +18,34 @@ import (
 )
 
 const (
-	UsernameFlag     = "username"
-	PasswordFlag     = "password"
-	DomainFlag       = "domain"
-	SecurityFlag     = "security"
-	FileModeFlag     = "fileMode"
-	DirModeFlag      = "dirMode"
-	VersionFlag      = "version"
-	OptionsFlag      = "options"
-	BasedirFlag      = "basedir"
-	VerboseFlag      = "verbose"
-	AvailZoneFlag    = "az"
-	NoResolveFlag    = "noresolve"
-	NetRCFlag        = "netrc"
-	TCPFlag          = "tcp"
-	PortFlag         = "port"
-	NameServerFlag   = "nameserver"
-	NameFlag         = "name"
-	SecretFlag       = "secret"
-	ContextFlag      = "context"
-	CephMount        = "sorcemount"
-	CephPort         = "port"
-	CephOpts         = "options"
-	ServerMount      = "servermount"
+	UsernameFlag   = "username"
+	PasswordFlag   = "password"
+	DomainFlag     = "domain"
+	SecurityFlag   = "security"
+	FileModeFlag   = "fileMode"
+	DirModeFlag    = "dirMode"
+	VersionFlag    = "version"
+	OptionsFlag    = "options"
+	BasedirFlag    = "basedir"
+	VerboseFlag    = "verbose"
+	AvailZoneFlag  = "az"
+	NoResolveFlag  = "noresolve"
+	NetRCFlag      = "netrc"
+	TCPFlag        = "tcp"
+	PortFlag       = "port"
+	NameServerFlag = "nameserver"
+	NameFlag       = "name"
+	SecretFlag     = "secret"
+	ContextFlag    = "context"
+	CephMount      = "sorcemount"
+	CephPort       = "port"
+	CephOpts       = "options"
+	ServerMount    = "servermount"
+
+	SeaweedfsFilerPathFlag = "filerpath"
+	SeaweedfsFilerFlag     = "filer"
+	SeaweedfsFilerPortFlag = "filerport"
+
 	DockerEngineAPI  = "dockerapiversion"
 	EnvSambaUser     = "NETSHARE_CIFS_USERNAME"
 	EnvSambaPass     = "NETSHARE_CIFS_PASSWORD"
@@ -95,6 +100,12 @@ var (
 		Run:   execCEPH,
 	}
 
+	seaweedfsCmd = &cobra.Command{
+		Use:   "seaweedfs",
+		Short: "run plugin in seaweedfs mode",
+		Run:   execSEAWEEDFS,
+	}
+
 	versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Display current version and build date",
@@ -110,7 +121,7 @@ var (
 func Execute() {
 	setupFlags()
 	rootCmd.Long = fmt.Sprintf(NetshareHelp, Version, BuildDate)
-	rootCmd.AddCommand(versionCmd, cifsCmd, nfsCmd, efsCmd, cephCmd)
+	rootCmd.AddCommand(versionCmd, cifsCmd, nfsCmd, efsCmd, cephCmd, seaweedfsCmd)
 	rootCmd.Execute()
 }
 
@@ -144,6 +155,11 @@ func setupFlags() {
 	cephCmd.Flags().StringP(CephPort, "p", "6789", "Port to use for ceph mount.")
 	cephCmd.Flags().StringP(ServerMount, "S", "/mnt/ceph", "Directory to use as ceph local mount.")
 	cephCmd.Flags().StringP(OptionsFlag, "o", "", "Options passed to Ceph mounts ")
+
+	seaweedfsCmd.Flags().StringP(SeaweedfsFilerFlag, "f", "localhost:8080", "Address to seaweedfs filer")
+	seaweedfsCmd.Flags().StringP(SeaweedfsFilerPathFlag, "", "/", "Default path to mount on the remote filer")
+	seaweedfsCmd.Flags().IntP(SeaweedfsFilerPortFlag, "p", 9335, "Port to use for filer")
+	seaweedfsCmd.Flags().StringP(OptionsFlag, "o", "", "Options passed to Seaweedfs mounts")
 }
 
 func setupLogger(cmd *cobra.Command, args []string) {
@@ -160,6 +176,23 @@ func setDockerEnv() {
 		os.Setenv("DOCKER_API_VERSION", api)
 		log.Infof("DOCKER_API_VERSION: %s", api)
 	}
+}
+
+func execSEAWEEDFS(cmd *cobra.Command, args []string) {
+	filer, _ := cmd.Flags().GetString(SeaweedfsFilerFlag)
+	filerPath, _ := cmd.Flags().GetString(SeaweedfsFilerPathFlag)
+	filerPort, _ := cmd.Flags().GetInt(SeaweedfsFilerPortFlag)
+	opts, _ := cmd.Flags().GetString(OptionsFlag)
+	mount := syncDockerState("seaweedfs")
+	d := drivers.NewSeaweedfsDriver(
+		rootForType(drivers.SEAWEEDFS),
+		filer,
+		filerPort,
+		filerPath,
+		opts,
+		mount,
+	)
+	start(drivers.SEAWEEDFS, d)
 }
 
 func execCEPH(cmd *cobra.Command, args []string) {
@@ -302,7 +335,7 @@ func syncDockerState(driverName string) *drivers.MountManager {
 			continue
 		}
 		connections := activeConnections(vol.Name)
-		log.Infof("Recovered state: %s , %s , %s , %s , %d ", vol.Name, vol.Mountpoint, vol.Driver, vol.CreatedAt, connections)
+		log.Infof("Recovered state: %s , %s , %s , %d ", vol.Name, vol.Mountpoint, vol.Driver, connections)
 		mount.AddMount(vol.Name, vol.Mountpoint, connections)
 	}
 	return mount

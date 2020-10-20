@@ -7,6 +7,7 @@ const (
 	NFS
 	EFS
 	CEPH
+	SEAWEEDFS
 )
 
 var driverTypes = []string{
@@ -14,6 +15,7 @@ var driverTypes = []string{
 	"nfs",
 	"efs",
 	"ceph",
+	"seaweedfs",
 }
 
 func (dt DriverType) String() string {
